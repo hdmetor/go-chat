@@ -1,33 +1,55 @@
 package main
 
 import (
+	"bufio"
 	"log"
 	"net"
 )
 
 type ChatRoom struct {
-    // map to keep track of connected users
-    users map[sting] *ChatUser
-    // incoming messages
-    incoming chat string
-    // users joining
-    joins chat *ChatUser
-    // users disconnecting
-    disconnets chan string
+	// map to keep track of connected users
+	users map[string]*ChatUser
+	// incoming messages
+	incoming chan string
+	// users joining
+	joins chan *ChatUser
+	// users disconnecting
+	disconnets chan string
 }
 
 func CreateChatRoom() *ChatRoom {
 	return &ChatRoom{
-        users: make(map[string]*ChatUser),
-        incoming: make(chan string),
-        joins: make(chan *ChatUser),
-        disconnets: make(chan string),
-    }
+		users:      make(map[string]*ChatUser),
+		incoming:   make(chan string),
+		joins:      make(chan *ChatUser),
+		disconnets: make(chan string),
+	}
 }
 
 func (cr *ChatRoom) ListenForMessages() {}
-func (cr *ChatRoom) Join(conn net.Conn)     {}
+func (cr *ChatRoom) Join(conn net.Conn) {}
 
+type ChatUser struct {
+	username    string
+	connection  net.Conn
+	isConnected bool
+	sending     chan string
+	writer      *bufio.Writer
+	reader      *bufio.Reader
+}
+
+func CreateChatUser(conn net.Conn) *ChatUser {
+
+	return &ChatUser{
+
+		connection:  conn,
+		isConnected: false,
+		sending:     make(chan string),
+		writer:      bufio.NewWriter(conn),
+		reader:      bufio.NewReader(conn),
+	}
+
+}
 
 func main() {
 	log.Println("Starting chat server...")
