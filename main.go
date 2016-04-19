@@ -6,14 +6,26 @@ import (
 )
 
 type ChatRoom struct {
+    // map to keep track of connected users
+    users map[sting] *ChatUser
+    // incoming messages
+    incoming chat string
+    // users joining
+    joins chat *ChatUser
+    // users disconnecting
+    disconnets chan string
 }
 
 func CreateChatRoom() *ChatRoom {
-	return &ChatRoom{}
+	return &ChatRoom{
+        users: make(map[string]*ChatUser),
+        incoming: make(chan string),
+        joins: make(chan *ChatUser),
+        disconnets: make(chan string),
+    }
 }
 
 func (cr *ChatRoom) ListenForMessages() {}
-
 func (cr *ChatRoom) Join(conn net.Conn)     {}
 
 
