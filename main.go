@@ -27,7 +27,15 @@ func CreateChatRoom() *ChatRoom {
 }
 
 func (cr *ChatRoom) ListenForMessages() {}
-func (cr *ChatRoom) Join(conn net.Conn) {}
+
+func (cr *ChatRoom) Join(conn net.Conn) {
+    user := CreateChatUser(conn)
+    if user.Login(cr) == nil {
+        cr.joins <- user
+    } else {
+    	log.Fatal("Could not log in user ", cr)
+    }
+}
 
 type ChatUser struct {
 	username    string
@@ -49,6 +57,38 @@ func CreateChatUser(conn net.Conn) *ChatUser {
 		reader:      bufio.NewReader(conn),
 	}
 
+}
+
+func (cu *ChatUser) Login(chatroom *ChatRoom) error {
+
+    cu.WriteString("Welcome to the chat\n")
+    cu.WriteString("Your username is: ")
+    username, err := cu.ReadLine()
+    cu.username = username
+    if err != nil {
+    		return err
+    }
+
+    log.Println(cu.username, " logged in")
+
+    cu.WriteString("You are succesfully signed in as " + cu.username + "\n")
+    return nil
+
+}
+
+func (cu *ChatUser) WriteString (msg string) error {
+	_, err := cu.writer.WriteString(msg)
+	if err != nil {
+		return err
+	}
+	return cu.writer.Flush()
+}
+
+func (cu *ChatUser) ReadLine() (string, error) {
+	// ReadLine return (line []byte, isPrefix bookl, err error)
+	bytes, _, err := cu.reader.ReadLine()
+	message := string(bytes)
+	return message, err
 }
 
 func main() {
@@ -74,7 +114,7 @@ func main() {
 		}
 
 		log.Println(conn.RemoteAddr(), " joined!")
-		chatroom.Join(conn)
+		go chatroom.Join(conn)
 
 	}
 
