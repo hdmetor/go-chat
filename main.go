@@ -47,6 +47,13 @@ func (cr *ChatRoom) Join(conn net.Conn) {
 	}
 }
 
+func (cr *ChatRoom) Broadcast(msg string) {
+	for _, user := range cr.users {
+		user.Send(msg)
+	}
+
+}
+
 type ChatUser struct {
 	username    string
 	connection  net.Conn
@@ -99,6 +106,20 @@ func (cu *ChatUser) ReadLine() (string, error) {
 	bytes, _, err := cu.reader.ReadLine()
 	message := string(bytes)
 	return message, err
+}
+
+func (cu *ChatUser) Send(msg string) {
+	cu.sending <- msg
+}
+
+func (cu *ChatUser) WriteOutgoingMessages(room *ChatRoom) {
+	go func() {
+		for {
+			data := <-cu.sending
+			data = data + "\n"
+			cu.WriteString(data)
+		}
+	}()
 }
 
 func main() {
