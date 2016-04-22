@@ -26,7 +26,17 @@ func CreateChatRoom() *ChatRoom {
 	}
 }
 
-func (cr *ChatRoom) ListenForMessages() {}
+func (cr *ChatRoom) ListenForMessages() {
+	go func() {
+		for {
+			select {
+			case user := <-cr.joins:
+				cr.users[user.username] = user
+				cr.Broadcast(" --- " + user.username + " joined")
+			}
+		}
+	}()
+}
 
 func (cr *ChatRoom) Join(conn net.Conn) {
 	user := CreateChatUser(conn)
