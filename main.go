@@ -30,6 +30,8 @@ func (r *Room) ListenForMessages() {
 	go func() {
 		for {
 			select {
+				case message := <- r.incoming:
+				r.Broadcast(message)
 			case user := <-r.joins:
 				r.users[user.name] = user
 				r.Broadcast(" --- " + user.name + " joined")
@@ -144,7 +146,7 @@ func (u *User) ReadInMessages(room *Room) {
 
 func main() {
 	log.Println("Starting chat server...")
-	Room := CreateChatRoom()
+	room := CreateChatRoom()
 
 	// let's listen to port 6677
 	listener, err := net.Listen("tcp", ":6677")
@@ -152,7 +154,7 @@ func main() {
 		log.Fatal("Error while binding to port ", err)
 	}
 	defer listener.Close()
-	Room.ListenForMessages()
+	room.ListenForMessages()
 
 	// when accepting a connection, let's print the
 	// address of who has connected
@@ -165,7 +167,7 @@ func main() {
 		}
 
 		log.Println(conn.RemoteAddr(), " joined!")
-		go Room.Join(conn)
+		go room.Join(conn)
 
 	}
 
