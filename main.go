@@ -6,56 +6,57 @@ import (
 	"net"
 )
 
-type ChatRoom struct {
+type Room struct {
 	// map to keep track of connected users
-	users map[string]*ChatUser
+	users map[string]*User
 	// incoming messages
 	incoming chan string
 	// users joining
-	joins chan *ChatUser
+	joins chan *User
 	// users disconnecting
 	disconnets chan string
 }
 
-func CreateChatRoom() *ChatRoom {
-	return &ChatRoom{
-		users:      make(map[string]*ChatUser),
+func CreateChatRoom() *Room {
+	return &Room{
+		users:      make(map[string]*User),
 		incoming:   make(chan string),
-		joins:      make(chan *ChatUser),
+		joins:      make(chan *User),
 		disconnets: make(chan string),
 	}
 }
 
-func (cr *ChatRoom) ListenForMessages() {
+func (r *Room) ListenForMessages() {
 	go func() {
 		for {
 			select {
-			case user := <-cr.joins:
-				cr.users[user.username] = user
-				cr.Broadcast(" --- " + user.username + " joined")
+			case user := <-r.joins:
+				r.users[user.name] = user
+				r.Broadcast(" --- " + user.name + " joined")
 			}
 		}
 	}()
 }
 
-func (cr *ChatRoom) Join(conn net.Conn) {
-	user := CreateChatUser(conn)
-	if user.Login(cr) == nil {
-		cr.joins <- user
+func (r *Room) Join(conn net.Conn) {
+	user := CreateUser(conn)
+	if user.Login(r) == nil {
+		r.joins <- user
 	} else {
-		log.Fatal("Could not log in user ", cr)
+		log.Fatal("Could not log in user ", r)
+
 	}
 }
 
-func (cr *ChatRoom) Broadcast(msg string) {
-	for _, user := range cr.users {
+func (r *Room) Broadcast(msg string) {
+	for _, user := range r.users {
 		user.Send(msg)
 	}
 
 }
 
-type ChatUser struct {
-	username    string
+type User struct {
+	name        string
 	connection  net.Conn
 	isConnected bool
 	sending     chan string
@@ -63,9 +64,9 @@ type ChatUser struct {
 	reader      *bufio.Reader
 }
 
-func CreateChatUser(conn net.Conn) *ChatUser {
+func CreateUser(conn net.Conn) *User {
 
-	return &ChatUser{
+	return &User{
 
 		connection:  conn,
 		isConnected: false,
@@ -76,55 +77,74 @@ func CreateChatUser(conn net.Conn) *ChatUser {
 
 }
 
-func (cu *ChatUser) Login(chatroom *ChatRoom) error {
+func (u *User) Login(room *Room) error {
 
-	cu.WriteString("Welcome to the chat\n")
-	cu.WriteString("Your username is: ")
-	username, err := cu.ReadLine()
-	cu.username = username
+	u.WriteString("Welcome to the chat\n")
+	u.WriteString("Your name is: ")
+	name, err := u.ReadLine()
+	u.name = name
 	if err != nil {
 		return err
 	}
 
-	log.Println(cu.username, " logged in")
+	log.Println(u.name, " logged in")
 
-	cu.WriteString("You are succesfully signed in as " + cu.username + "\n")
+	u.WriteString("You are succesfully signed in as " + u.name + "\n")
+	u.WriteOutgoingMessages(room)
+	u.ReadInMessages(room)
+
 	return nil
 
 }
 
-func (cu *ChatUser) WriteString(msg string) error {
-	_, err := cu.writer.WriteString(msg)
+func (u *User) WriteString(msg string) error {
+	_, err := u.writer.WriteString(msg)
 	if err != nil {
 		return err
 	}
-	return cu.writer.Flush()
+	return u.writer.Flush()
 }
 
-func (cu *ChatUser) ReadLine() (string, error) {
+func (u *User) ReadLine() (string, error) {
 	// ReadLine return (line []byte, isPrefix bookl, err error)
-	bytes, _, err := cu.reader.ReadLine()
+	bytes, _, err := u.reader.ReadLine()
 	message := string(bytes)
 	return message, err
 }
 
-func (cu *ChatUser) Send(msg string) {
-	cu.sending <- msg
+func (u *User) Send(msg string) {
+	u.sending <- msg
 }
 
-func (cu *ChatUser) WriteOutgoingMessages(room *ChatRoom) {
+func (u *User) WriteOutgoingMessages(room *Room) {
 	go func() {
 		for {
-			data := <-cu.sending
+			data := <-u.sending
 			data = data + "\n"
-			cu.WriteString(data)
+			u.WriteString(data)
+		}
+	}()
+}
+
+func (u *User) ReadInMessages(room *Room) {
+	go func() {
+		for {
+			message, err := u.ReadLine()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if message != "" {
+				room.incoming <- ("[" + u.name + "]: " + message)
+			}
+
 		}
 	}()
 }
 
 func main() {
 	log.Println("Starting chat server...")
-	chatroom := CreateChatRoom()
+	Room := CreateChatRoom()
 
 	// let's listen to port 6677
 	listener, err := net.Listen("tcp", ":6677")
@@ -132,7 +152,7 @@ func main() {
 		log.Fatal("Error while binding to port ", err)
 	}
 	defer listener.Close()
-	chatroom.ListenForMessages()
+	Room.ListenForMessages()
 
 	// when accepting a connection, let's print the
 	// address of who has connected
@@ -145,7 +165,7 @@ func main() {
 		}
 
 		log.Println(conn.RemoteAddr(), " joined!")
-		go chatroom.Join(conn)
+		go Room.Join(conn)
 
 	}
 
