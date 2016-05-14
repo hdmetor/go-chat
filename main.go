@@ -14,15 +14,15 @@ type Room struct {
 	// users joining
 	joins chan *User
 	// users disconnecting
-	disconnets chan string
+	disconnects chan string
 }
 
 func CreateChatRoom() *Room {
 	return &Room{
-		users:      make(map[string]*User),
-		incoming:   make(chan string),
-		joins:      make(chan *User),
-		disconnets: make(chan string),
+		users:       make(map[string]*User),
+		incoming:    make(chan string),
+		joins:       make(chan *User),
+		disconnects: make(chan string),
 	}
 }
 
@@ -30,11 +30,18 @@ func (r *Room) ListenForMessages() {
 	go func() {
 		for {
 			select {
-				case message := <- r.incoming:
+			case message := <-r.incoming:
 				r.Broadcast(message)
 			case user := <-r.joins:
 				r.users[user.name] = user
 				r.Broadcast(" --- " + user.name + " joined")
+			case user := <-r.disconnects:
+				// remove the user from the mapping
+				if r.users[user] != nil {
+					r.users[user].Close()
+					delete(r.users, user)
+					r.Broadcast("--- " + user + " left the room")
+				}
 			}
 		}
 	}()
@@ -50,6 +57,10 @@ func (r *Room) Join(conn net.Conn) {
 	}
 }
 
+func (r *Room) Logout(user string) {
+	r.disconnects <- user
+}
+
 func (r *Room) Broadcast(msg string) {
 	for _, user := range r.users {
 		user.Send(msg)
@@ -58,23 +69,23 @@ func (r *Room) Broadcast(msg string) {
 }
 
 type User struct {
-	name        string
-	connection  net.Conn
-	isConnected bool
-	sending     chan string
-	writer      *bufio.Writer
-	reader      *bufio.Reader
+	name       string
+	connection net.Conn
+	disconnect bool
+	sending    chan string
+	writer     *bufio.Writer
+	reader     *bufio.Reader
 }
 
 func CreateUser(conn net.Conn) *User {
 
 	return &User{
 
-		connection:  conn,
-		isConnected: false,
-		sending:     make(chan string),
-		writer:      bufio.NewWriter(conn),
-		reader:      bufio.NewReader(conn),
+		connection: conn,
+		disconnect: false,
+		sending:    make(chan string),
+		writer:     bufio.NewWriter(conn),
+		reader:     bufio.NewReader(conn),
 	}
 
 }
@@ -122,8 +133,15 @@ func (u *User) WriteOutgoingMessages(room *Room) {
 	go func() {
 		for {
 			data := <-u.sending
+			if u.disconnect {
+				break
+			}
 			data = data + "\n"
-			u.WriteString(data)
+			err := u.WriteString(data)
+			if err != nil {
+				room.Logout(u.name)
+				break
+			}
 		}
 	}()
 }
@@ -132,8 +150,13 @@ func (u *User) ReadInMessages(room *Room) {
 	go func() {
 		for {
 			message, err := u.ReadLine()
+			if u.disconnect {
+				break
+			}
+			// when a user disconnects err is going to be EOF
 			if err != nil {
-				log.Fatal(err)
+				room.Logout(u.name)
+				break
 			}
 
 			if message != "" {
@@ -142,6 +165,11 @@ func (u *User) ReadInMessages(room *Room) {
 
 		}
 	}()
+}
+
+func (u *User) Close() {
+	u.disconnect = true
+	u.connection.Close()
 }
 
 func main() {
