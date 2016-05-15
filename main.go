@@ -93,11 +93,22 @@ func CreateUser(conn net.Conn) *User {
 func (u *User) Login(room *Room) error {
 
 	u.WriteString("Welcome to the chat\n")
-	u.WriteString("Your name is: ")
-	name, err := u.ReadLine()
-	u.name = name
-	if err != nil {
-		return err
+
+	ask := true
+	for ask {
+		u.WriteString("Please enter your name: ")
+		name, err := u.ReadLine()
+		if err != nil {
+			log.Fatal("Trying to login as ", name, err)
+			return err
+		}
+		if _, ok := room.users[name]; ok {
+			log.Println("User ", name, " already exists")
+			u.WriteString("The name is unavailable, please try again")
+		} else {
+			u.name = name
+			ask = false
+		}
 	}
 
 	log.Println(u.name, " logged in")
@@ -186,7 +197,6 @@ func main() {
 
 	// when accepting a connection, let's print the
 	// address of who has connected
-
 	for {
 		conn, err := listener.Accept()
 
