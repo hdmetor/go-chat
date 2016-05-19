@@ -105,7 +105,10 @@ func (u *User) Login(room *Room) error {
 		}
 		if _, ok := room.users[name]; ok {
 			log.Println("User ", name, " already exists")
-			u.WriteString("The name is unavailable, please try again")
+			u.WriteString("The name is unavailable, please try again\n")
+		} else if strings.HasPrefix(name, "/") {
+			log.Println(name, " reserved")
+			u.WriteString("Name are not allowed to start with '/', please try again\n")
 		} else {
 			u.name = name
 			ask = false
