@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"log"
 	"net"
+	"strings"
 )
 
 type Room struct {
@@ -110,7 +111,6 @@ func (u *User) Login(room *Room) error {
 			ask = false
 		}
 	}
-
 	log.Println(u.name, " logged in")
 
 	u.WriteString("You are succesfully signed in as " + u.name + "\n")
@@ -130,7 +130,7 @@ func (u *User) WriteString(msg string) error {
 }
 
 func (u *User) ReadLine() (string, error) {
-	// ReadLine return (line []byte, isPrefix bookl, err error)
+	// ReadLine return (line []byte, isPrefix bool, err error)
 	bytes, _, err := u.reader.ReadLine()
 	message := string(bytes)
 	return message, err
@@ -164,13 +164,21 @@ func (u *User) ReadInMessages(room *Room) {
 			if u.disconnect {
 				break
 			}
+
 			// when a user disconnects err is going to be EOF
 			if err != nil {
 				room.Logout(u.name)
 				break
 			}
 
-			if message != "" {
+			// note: factor this out if more commands are added
+			if strings.HasPrefix(message, "/users") {
+				u.Send("\nThe users in this chat room are:")
+				for user := range room.users {
+					u.Send(user)
+				}
+
+			} else if message != "" {
 				room.incoming <- ("[" + u.name + "]: " + message)
 			}
 
@@ -193,6 +201,8 @@ func main() {
 		log.Fatal("Error while binding to port ", err)
 	}
 	defer listener.Close()
+
+	//note: the following is a goroutine
 	room.ListenForMessages()
 
 	// when accepting a connection, let's print the
